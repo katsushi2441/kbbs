@@ -11,15 +11,27 @@
  * 認証は auth_common.php（url2ai_auth_*）を利用。
  * (c) EXBRIDGE, Inc. / MIT License
  */
-require_once __DIR__ . '/auth_common.php';
-
-if (isset($_GET['login']))  { header('Location: ' . url2ai_auth_login_url('/kbbs.php'));  exit; }
-if (isset($_GET['logout'])) { header('Location: ' . url2ai_auth_logout_url('/kbbs.php')); exit; }
-
-$auth = url2ai_auth_bootstrap();
-$logged_in = !empty($auth['logged_in']);
-$user = $logged_in ? trim((string)$auth['session_user']) : '';
-$is_admin = $logged_in && !empty($auth['is_admin']);
+/* ---- 認証 ----
+ * 同ディレクトリに auth_common.php（X OAuthブートストラップ）があれば「𝕏ログイン必須」モード。
+ * 無ければスタンドアロンモード（誰でも投稿フォームは開けるが、投稿には
+ * 宣伝URLと同一ドメインのメールアドレスが必須＝本人性チェックはそのまま効く）。 */
+if (!defined('KBBS_ADMIN_KEY')) { define('KBBS_ADMIN_KEY', 'change-me'); }  // スタンドアロン時の管理画面キー（?admin=1&key=〜）。設置したら必ず変更。
+$KBBS_X = file_exists(__DIR__ . '/auth_common.php');
+if ($KBBS_X) {
+    require_once __DIR__ . '/auth_common.php';
+    if (isset($_GET['login']))  { header('Location: ' . url2ai_auth_login_url('/kbbs.php'));  exit; }
+    if (isset($_GET['logout'])) { header('Location: ' . url2ai_auth_logout_url('/kbbs.php')); exit; }
+    $auth = url2ai_auth_bootstrap();
+    $logged_in = !empty($auth['logged_in']);
+    $user = $logged_in ? trim((string)$auth['session_user']) : '';
+    $is_admin = $logged_in && !empty($auth['is_admin']);
+} else {
+    if (session_status() === PHP_SESSION_NONE) { session_start(); }
+    $logged_in = true;
+    $user = '';
+    $is_admin = isset($_GET['key']) && KBBS_ADMIN_KEY !== 'change-me'
+        && hash_equals(KBBS_ADMIN_KEY, (string)$_GET['key']);
+}
 function h($s){ return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
 /* ---- 保存。先頭行の <?php exit; でWeb直読みを防ぐ（メールアドレスを含むため） ---- */
@@ -81,16 +93,18 @@ if ($logged_in && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif (!kbbs_domain_ok($url, $eml)) {
         $err = 'メールアドレスは、宣伝するURLと同じドメインのものをご入力ください（例：URLが https://example.jp なら info@example.jp）。会社・サービスのご本人様であることの確認のためです。';
     } else {
-        // 連投制限: 同一ユーザーは22時間に1回
+        // 連投制限: 22時間に1回（Xログイン時=ユーザー単位／スタンドアロン=宣伝ドメイン単位）
+        $host = strtolower((string)parse_url($url, PHP_URL_HOST));
         foreach (array_reverse(kbbs_all()) as $p) {
-            if ($p['user'] === $user && (time() - (int)$p['ts']) < 22 * 3600) {
+            $same = ($user !== '') ? (($p['user'] ?? '') === $user) : (($p['host'] ?? '') === $host);
+            if ($same && (time() - (int)$p['ts']) < 22 * 3600) {
                 $err = '投稿は1日1回までです。また明日お願いします。'; break;
             }
         }
         if ($err === '') {
             kbbs_append(array(
                 'id' => uniqid(), 'ts' => time(), 'user' => preg_replace('/[^0-9A-Za-z_]/', '', $user),
-                'title' => $t, 'text' => $txt, 'url' => $url, 'email' => $eml,
+                'host' => $host, 'title' => $t, 'text' => $txt, 'url' => $url, 'email' => $eml,
             ));
             header('Location: kbbs.php?posted=1'); exit;
         }
@@ -118,7 +132,7 @@ if ($is_admin && isset($_GET['admin'])) {
     <table><tr><th>日時</th><th>𝕏</th><th>タイトル</th><th>会社URL</th><th>メール</th><th>アクション</th></tr>
     <?php foreach ($rows as $p): ?>
     <tr><td><?php echo h(date('m/d H:i', (int)$p['ts'])); ?></td>
-    <td><img src="https://unavatar.io/x/<?php echo rawurlencode($p['user']); ?>" alt="" loading="lazy">@<?php echo h($p['user']); ?></td>
+    <td><?php if (!empty($p['user'])): ?><img src="https://unavatar.io/x/<?php echo rawurlencode($p['user']); ?>" alt="" loading="lazy">@<?php echo h($p['user']); ?><?php else: ?>（<?php echo h($p['host'] ?? ''); ?>）<?php endif; ?></td>
     <td><?php echo h($p['title']); ?></td>
     <td><a href="<?php echo h($p['url']); ?>" target="_blank" rel="noopener"><?php echo h(parse_url($p['url'], PHP_URL_HOST)); ?></a></td>
     <td><?php echo h($p['email']); ?></td>
@@ -204,7 +218,7 @@ footer a{color:#fff}
 <body>
 <header>
   <a href="kbbs.php">Kurage BBS</a>
-  <?php if ($logged_in): ?><span class="u">@<?php echo h($user); ?> ／ <a href="?logout=1" style="font-weight:400">ログアウト</a></span><?php endif; ?>
+  <?php if ($KBBS_X && $logged_in && $user !== ''): ?><span class="u">@<?php echo h($user); ?> ／ <a href="?logout=1" style="font-weight:400">ログアウト</a></span><?php endif; ?>
 </header>
 
 <div class="hero">
@@ -243,6 +257,7 @@ footer a{color:#fff}
     <button type="submit" onclick="if(window.gtag)gtag('event','kbbs_post_submit')">投稿する（無料）</button>
   </form>
 </div>
+<?php if ($KBBS_X): ?>
 <div class="follow">
   <img src="xb_bittensor-icon.jpg" alt="@xb_bittensor" loading="lazy">
   <div><b>𝕏 @xb_bittensor をフォローしてください</b>
@@ -250,6 +265,7 @@ footer a{color:#fff}
     <a class="fbtn" href="https://x.com/intent/follow?screen_name=xb_bittensor" target="_blank" rel="noopener" onclick="if(window.gtag)gtag('event','follow_click',{source:'kbbs'})">𝕏 @xb_bittensor をフォロー</a>
   </div>
 </div>
+<?php endif; ?>
 <?php else: ?>
 <div class="gate">
   <p style="font-weight:800;color:var(--teal-d);font-size:16px">投稿には 𝕏 ログインが必要です</p>
@@ -279,7 +295,8 @@ footer a{color:#fff}
 <div class="post-item">
   <div class="t"><?php echo h($p['title']); ?></div>
   <div class="meta"><?php echo h(date('Y/m/d H:i', (int)$p['ts'])); ?> ／ 投稿:
-    <a href="https://x.com/<?php echo rawurlencode($p['user']); ?>" target="_blank" rel="noopener">@<?php echo h($p['user']); ?></a></div>
+    <?php if (!empty($p['user'])): ?><a href="https://x.com/<?php echo rawurlencode($p['user']); ?>" target="_blank" rel="noopener">@<?php echo h($p['user']); ?></a>
+    <?php else: ?><?php echo h($p['host'] ?? parse_url($p['url'], PHP_URL_HOST)); ?><?php endif; ?></div>
   <div class="b"><?php echo h($p['text']); ?></div>
   <div class="u"><a href="<?php echo h($p['url']); ?>" target="_blank">🔗 <?php echo h($p['url']); ?></a></div>
 </div>
@@ -290,12 +307,40 @@ footer a{color:#fff}
 <?php endfor; ?></div>
 <?php endif; ?>
 
+<?php if ($KBBS_X): ?>
+<h2 class="sec">🔗 なぜ、宣伝OKの掲示板なのか</h2>
+<div class="card" style="font-size:14px">
+  <p><b style="color:var(--teal-d)">被リンクは、いまも検索順位の土台です。</b><br>
+  Googleは「他のサイトからリンクされているサイト＝誰かに推薦されているサイト」を信頼します。
+  どれだけ良いホームページを作っても、外部からのリンクがゼロのままでは、検索エンジンにとって「誰にも言及されていないお店」と同じ。
+  <b>外部サイトからの被リンクは、SEOの最重要シグナルのひとつ</b>であり続けています。</p>
+  <p style="margin-top:12px"><b style="color:var(--teal-d)">でも、URLを書ける場所が減りました。</b><br>
+  かつてのインターネットには、気軽に自社サイトを紹介できる掲示板やリンク集がたくさんあり、
+  小さな会社でも自然に被リンクを育てられました。いまは「宣伝お断り」が当たり前になり、
+  URLを書き込める場所は驚くほど少なくなっています。<b>「被リンクが大事」と言われるのに、リンクを張れる場所がない</b>——
+  この矛盾を少しでも解消したくて、この掲示板を開設しました。</p>
+  <p style="margin-top:12px">だからここでは、堂々と宣伝してください。あなたの投稿はそのまま<b>あなたのサイトへの被リンク</b>になります。
+  同一ドメインのメール確認があるので、スパムに埋もれることもありません。</p>
+</div>
+
+<div class="card" style="border:2px solid var(--teal-l);box-shadow:0 10px 28px rgba(10,90,84,.10)">
+  <b style="color:var(--teal-d);font-size:15.5px">🏢 経営者の皆さまへ — あなたのサイトにも、この掲示板を置きませんか</b>
+  <p style="font-size:13.5px;margin-top:8px">
+  こういう「荒れない宣伝板」が、いろいろなサイトに増えるほど、被リンクを張り合える健全な場所がネットに戻ってきます。
+  kbbsは<b>1ファイルのPHPをFTPで置くだけ</b>で、あなたのサイトにも同じ掲示板を設置できます（DB不要・改変自由のMITライセンス）。
+  さらに管理画面には、投稿した会社のURLと本人確認済みメールが一覧されるので、<b>設置するだけで見込み客との接点リストが育ちます</b>。</p>
+  <p style="margin-top:12px"><a href="https://kappstore.exbridge.jp/app.php?id=4bd9a6f3f99cdc05"
+     style="display:inline-block;background:linear-gradient(135deg,var(--teal-l),var(--teal-d));color:#fff;font-weight:900;font-size:14.5px;text-decoration:none;border-radius:999px;padding:11px 26px"
+     onclick="if(window.gtag)gtag('event','product_click',{item:'kbbs-product',source:location.pathname})">🛍️ Kurage App Store で見る（買い切り55,000円・ソース同梱）</a></p>
+</div>
+
 <div class="card" style="margin-top:26px;background:#eef7f6;border-color:#cfe6e2;font-size:13px">
   <b>運営:</b> 株式会社エクスブリッジ（名古屋のAIシステム開発会社）。
   この掲示板は1ファイルPHP・DB不要の自社開発です。
   AI活用の情報交換は<a href="https://kurage.exbridge.jp/nagoya-ai-study.php?ref=kbbs" style="color:var(--teal);font-weight:700">名古屋AI経営勉強会</a>、
   業務システムのご相談は<a href="https://kurage.exbridge.jp/chat.php?ref=kbbs" style="color:var(--teal);font-weight:700">無料AI相談</a>へ。
 </div>
+<?php endif; ?>
 
 </div>
 
