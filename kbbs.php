@@ -150,6 +150,11 @@ $pages = max(1, (int)ceil($total / $per));
 <meta property="og:title" content="Kurage BBS — 宣伝OK・リンクOKの掲示板">
 <meta property="og:description" content="会社・お店・サービスの宣伝を歓迎。ホームページへのリンク投稿OK。𝕏ログイン＋同一ドメインメールの本人確認つき。">
 <meta property="og:url" content="https://kurage.exbridge.jp/kbbs.php">
+<meta property="og:image" content="https://kurage.exbridge.jp/images/kbbs-ogp.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://kurage.exbridge.jp/images/kbbs-ogp.png">
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-BP0650KDFR"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-BP0650KDFR');</script>
 <script>(function(){var s=document.createElement('script');s.src='https://kurage.exbridge.jp/simpletrack.php?url='+encodeURIComponent(location.href)+'&ref='+encodeURIComponent(document.referrer);document.head.appendChild(s)})();</script>
@@ -203,6 +208,7 @@ footer a{color:#fff}
 </header>
 
 <div class="hero">
+  <img src="images/kurage-ecosystem-avatar.png" alt="Kurage" style="height:120px;display:block;margin:0 auto 8px;filter:drop-shadow(0 6px 16px rgba(10,90,84,.25))">
   <h1>宣伝OK・リンクOKの掲示板</h1>
   <p class="tag">会社・お店・サービスのPRを歓迎します。ホームページへのリンクもどうぞ。</p>
   <div class="badges"><span>宣伝歓迎</span><span>リンクOK</span><span>掲載無料</span><span>𝕏ログイン制</span></div>
