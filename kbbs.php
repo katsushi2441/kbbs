@@ -110,7 +110,7 @@ if ($logged_in && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
-if (isset($_GET['posted'])) { $ok_msg = '投稿しました。掲載ありがとうございます！'; }
+if (isset($_GET['posted'])) { $ok_msg = '投稿しました。掲載ありがとうございます！ ご入力のメールアドレス宛に、そのURLのSEO/GEO/AEO自動診断の結果を追ってお送りします。'; }
 
 /* ---- 管理者: 投稿者一覧（メール・𝕏フォロー/DM＝営業の起点） ---- */
 if ($is_admin && isset($_GET['admin'])) {
@@ -253,7 +253,7 @@ footer a{color:#fff}
     <div class="hint">投稿に表示され、リンクになります。</div>
     <label>メールアドレス（URLと同じドメイン）</label>
     <input type="email" name="email" required value="<?php echo h($_POST['email'] ?? ''); ?>" placeholder="info@example.jp">
-    <div class="hint">ご本人様確認のため、<b>宣伝するURLと同じドメイン</b>のメールアドレスが必要です（例：URLが example.jp なら 〇〇@example.jp）。メールアドレスは公開されません。</div>
+    <div class="hint">ご本人様確認のため、<b>宣伝するURLと同じドメイン</b>のメールアドレスが必要です（例：URLが example.jp なら 〇〇@example.jp）。メールアドレスは公開されません。<br><b>ご投稿いただいたURLのSEO/GEO/AEO自動診断の結果を、このアドレス宛にお送りします（無料）。</b></div>
     <button type="submit" onclick="if(window.gtag)gtag('event','kbbs_post_submit')">投稿する（無料）</button>
   </form>
 </div>
