@@ -36,6 +36,23 @@ $ENV = load_env($ENV_FILE);
 $SMTP_HOST = $ENV['SMTP_HOST'] ?? 'mail18.heteml.jp';
 $SMTP_PORT = (int)($ENV['SMTP_PORT'] ?? 465);
 $SMTP_USER = $ENV['SMTP_FROM'] ?? '';
+
+/* ---- 実投稿はサーバー(heteml)側のkbbs_posts.log.phpに保存される。
+ * ローカルの空ファイルではなく、サーバーの投稿ログをFTPで取得してから処理する。
+ * 送信済み(kbbs_geo_sent.log.php)はローカルに永続させ、再送を防ぐ。 ---- */
+$REMOTE_PATH = getenv('KBBS_REMOTE_LOG') ?: '/web/kurage_exbridge_jp/kbbs_posts.log.php';
+if (!empty($ENV['FTP_HOST']) && !empty($ENV['FTP_USER']) && !empty($ENV['FTP_PASS'])) {
+    $ftp_url = sprintf('ftp://%s:%s@%s%s',
+        rawurlencode($ENV['FTP_USER']), rawurlencode($ENV['FTP_PASS']), $ENV['FTP_HOST'], $REMOTE_PATH);
+    $tmp = sys_get_temp_dir() . '/kbbs_posts_remote.log.php';
+    $ch = curl_init($ftp_url);
+    curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 40));
+    $data = curl_exec($ch);
+    $ok = ($data !== false && curl_getinfo($ch, CURLINFO_HTTP_CODE) < 400 && strpos($data, '<?php') === 0);
+    curl_close($ch);
+    if ($ok) { file_put_contents($tmp, $data); $KBBS_LOG = $tmp; }
+    else { fwrite(STDERR, "警告: サーバー投稿ログを取得できず。ローカルを使用。\n"); }
+}
 $SMTP_PASS = $ENV['SMTP_PASSWORD'] ?? '';
 $FROM_NAME = 'Kurage（株式会社エクスブリッジ）';
 
