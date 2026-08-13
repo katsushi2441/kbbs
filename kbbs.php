@@ -16,6 +16,8 @@
  * 無ければスタンドアロンモード（誰でも投稿フォームは開けるが、投稿には
  * 宣伝URLと同一ドメインのメールアドレスが必須＝本人性チェックはそのまま効く）。 */
 if (!defined('KBBS_ADMIN_KEY')) { define('KBBS_ADMIN_KEY', 'change-me'); }  // スタンドアロン時の管理画面キー（?admin=1&key=〜）。設置したら必ず変更。
+if (!defined('KBBS_BASE_URL'))  { define('KBBS_BASE_URL', 'https://kurage.exbridge.jp/kbbs.php'); }  // 個別ページ/canonical/OGPの絶対URL基点。設置ドメインに合わせて変更。
+if (!defined('KBBS_INDEX_MIN_LEN')) { define('KBBS_INDEX_MIN_LEN', 60); }  // これ未満の本文の投稿は個別ページを noindex（薄い宣伝でサイト品質を下げないため）。被リンク自体は follow で有効。
 $KBBS_X = file_exists(__DIR__ . '/auth_common.php');
 if ($KBBS_X) {
     require_once __DIR__ . '/auth_common.php';
@@ -66,6 +68,25 @@ function kbbs_domain_ok($url, $email) {
     if (substr($edom, -strlen('.' . $host)) === '.' . $host) { return true; }  // example.jp × mail.example.jp
     return false;
 }
+
+/* ---- 個別ページ（固有URL）まわり: SEO/GEO/AEO ---- */
+function kbbs_find($id) {                       // idで1投稿を引く
+    if ($id === '' || $id === null) { return null; }
+    foreach (kbbs_all() as $p) { if (($p['id'] ?? '') === $id) { return $p; } }
+    return null;
+}
+function kbbs_permalink($post, $absolute = false) {   // 投稿の固有URL
+    $q = 'kbbs.php?id=' . rawurlencode((string)($post['id'] ?? ''));
+    return $absolute ? (preg_replace('#/kbbs\.php$#', '/', KBBS_BASE_URL) . $q) : $q;
+}
+function kbbs_indexable($post) {                // 品質しきい値: 本文がこの長さ以上なら index 可
+    return mb_strlen(trim((string)($post['text'] ?? '')), 'UTF-8') >= KBBS_INDEX_MIN_LEN;
+}
+function kbbs_excerpt($s, $n = 110) {           // meta description 用の抜粋
+    $s = trim(preg_replace('/\s+/u', ' ', (string)$s));
+    return (mb_strlen($s, 'UTF-8') > $n) ? (mb_substr($s, 0, $n, 'UTF-8') . '…') : $s;
+}
+function kbbs_iso($ts) { return date('c', (int)$ts); }
 
 /* ---- CSRF ---- */
 if (session_status() === PHP_SESSION_ACTIVE && empty($_SESSION['kbbs_csrf'])) {
@@ -141,6 +162,105 @@ if ($is_admin && isset($_GET['admin'])) {
     <?php endforeach; ?>
     <?php if (!$rows): ?><tr><td colspan="6">まだ投稿がありません。</td></tr><?php endif; ?>
     </table></body></html><?php
+    exit;
+}
+
+/* ---- 個別ページ（固有URL ?id=）: 1投稿=1LP。DiscussionForumPosting/BreadcrumbList の JSON-LD 付き、
+ *      本文が薄い投稿は noindex,follow（被リンクは活かしつつサイト品質を守る） ---- */
+if (isset($_GET['id'])) {
+    $sp = kbbs_find((string)$_GET['id']);
+    if (!$sp) {
+        http_response_code(404);
+        ?><!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="robots" content="noindex,follow"><title>投稿が見つかりません｜Kurage BBS</title>
+        <style>body{font-family:"Hiragino Sans","Noto Sans JP",sans-serif;background:#f4faf9;color:#20323a;text-align:center;padding:80px 20px;line-height:1.9}a{color:#0f7a72;font-weight:700}</style>
+        </head><body><h1 style="color:#0a5a54;font-size:22px">投稿が見つかりません</h1>
+        <p>削除されたか、URLが正しくない可能性があります。</p>
+        <p><a href="kbbs.php">← Kurage BBS の一覧へ戻る</a></p></body></html><?php
+        exit;
+    }
+    $sp_title = (string)($sp['title'] ?? '');
+    $sp_text  = (string)($sp['text'] ?? '');
+    $sp_url   = (string)($sp['url'] ?? '');
+    $sp_user  = (string)($sp['user'] ?? '');
+    $sp_host  = (string)($sp['host'] ?? '') !== '' ? (string)$sp['host'] : (string)parse_url($sp_url, PHP_URL_HOST);
+    $sp_ts    = (int)($sp['ts'] ?? time());
+    $sp_perma = kbbs_permalink($sp, true);
+    $sp_idx   = kbbs_indexable($sp);
+    $sp_desc  = kbbs_excerpt($sp_text, 110);
+    if ($sp_user !== '') { $author = array('@type'=>'Person','name'=>'@'.$sp_user,'url'=>'https://x.com/'.$sp_user); }
+    else { $author = array('@type'=>'Organization','name'=>$sp_host,'url'=>$sp_url); }
+    $ld_post = array(
+        '@context'=>'https://schema.org','@type'=>'DiscussionForumPosting',
+        'headline'=>$sp_title,'text'=>$sp_text,'datePublished'=>kbbs_iso($sp_ts),
+        'url'=>$sp_perma,'inLanguage'=>'ja','author'=>$author,
+        'publisher'=>array('@type'=>'Organization','name'=>'Kurage BBS（株式会社エクスブリッジ）','url'=>preg_replace('#\?.*$#','',KBBS_BASE_URL)),
+        'sharedContent'=>array('@type'=>'WebPage','url'=>$sp_url,'name'=>$sp_title),
+    );
+    $ld_bc = array('@context'=>'https://schema.org','@type'=>'BreadcrumbList','itemListElement'=>array(
+        array('@type'=>'ListItem','position'=>1,'name'=>'Kurage BBS','item'=>preg_replace('#\?.*$#','',KBBS_BASE_URL)),
+        array('@type'=>'ListItem','position'=>2,'name'=>$sp_title),
+    ));
+    $J = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES;
+    ?><!DOCTYPE html><html lang="ja"><head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?php echo h($sp_title); ?>｜Kurage BBS</title>
+    <meta name="description" content="<?php echo h($sp_desc); ?>">
+    <link rel="canonical" href="<?php echo h($sp_perma); ?>">
+    <?php if (!$sp_idx): ?><meta name="robots" content="noindex,follow">
+    <?php endif; ?><meta property="og:type" content="article">
+    <meta property="og:title" content="<?php echo h($sp_title); ?>">
+    <meta property="og:description" content="<?php echo h($sp_desc); ?>">
+    <meta property="og:url" content="<?php echo h($sp_perma); ?>">
+    <meta property="og:image" content="https://kurage.exbridge.jp/images/kbbs-ogp.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:image" content="https://kurage.exbridge.jp/images/kbbs-ogp.png">
+    <script type="application/ld+json"><?php echo json_encode($ld_post, $J); ?></script>
+    <script type="application/ld+json"><?php echo json_encode($ld_bc, $J); ?></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-BP0650KDFR"></script>
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-BP0650KDFR');</script>
+    <script>(function(){var s=document.createElement('script');s.src='https://kurage.exbridge.jp/simpletrack.php?url='+encodeURIComponent(location.href)+'&ref='+encodeURIComponent(document.referrer);document.head.appendChild(s)})();</script>
+    <style>
+    :root{--teal:#0f7a72;--teal-d:#0a5a54;--teal-l:#12a99f;--bg:#f4faf9;--ink:#20323a}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;background:var(--bg);color:var(--ink);line-height:1.9}
+    header{background:linear-gradient(135deg,var(--teal-d),var(--teal-l));color:#fff;padding:14px 18px}
+    header a{color:#fff;text-decoration:none;font-weight:900;font-size:17px}
+    .wrap{max-width:720px;margin:0 auto;padding:18px 18px 60px}
+    .bc{font-size:12px;color:#5b6f76;margin:12px 0}
+    .bc a{color:var(--teal);text-decoration:none;font-weight:700}
+    article{background:#fff;border:1px solid #e2ecea;border-radius:14px;padding:22px 22px 26px;margin-top:6px}
+    article h1{font-size:clamp(20px,4.6vw,27px);color:#16323c;line-height:1.5}
+    .meta{font-size:12px;color:#6b7f86;margin-top:8px;border-bottom:1px solid #eef2f1;padding-bottom:12px}
+    .meta a{color:var(--teal);font-weight:700;text-decoration:none}
+    .body{font-size:15px;margin-top:16px;white-space:pre-wrap;word-break:break-word}
+    .visit{margin-top:20px}
+    .visit a{display:inline-block;background:linear-gradient(135deg,var(--teal-l),var(--teal-d));color:#fff;font-weight:900;font-size:15px;text-decoration:none;border-radius:999px;padding:12px 26px;word-break:break-all}
+    .back{display:inline-block;margin-top:22px;font-size:14px;color:var(--teal);font-weight:800;text-decoration:none}
+    .promo{background:#eef7f6;border:1px solid #cfe6e2;border-radius:12px;padding:14px 16px;margin-top:22px;font-size:13px}
+    .promo a{color:var(--teal);font-weight:700}
+    footer{background:var(--teal-d);color:#cfe8e5;text-align:center;font-size:13px;padding:20px 14px;margin-top:34px}
+    footer a{color:#fff}
+    </style></head><body>
+    <header><a href="kbbs.php">Kurage BBS</a></header>
+    <div class="wrap">
+      <div class="bc"><a href="kbbs.php">Kurage BBS（宣伝・求人OKの掲示板）</a> › 投稿</div>
+      <article>
+        <h1><?php echo h($sp_title); ?></h1>
+        <div class="meta"><?php echo h(date('Y/m/d H:i', $sp_ts)); ?> ／ 投稿:
+          <?php if ($sp_user !== ''): ?><a href="https://x.com/<?php echo rawurlencode($sp_user); ?>" target="_blank" rel="noopener">@<?php echo h($sp_user); ?></a><?php else: ?><?php echo h($sp_host); ?><?php endif; ?>
+        </div>
+        <div class="body"><?php echo h($sp_text); ?></div>
+        <div class="visit"><a href="<?php echo h($sp_url); ?>" target="_blank">🔗 <?php echo h($sp_url); ?></a></div>
+      </article>
+      <div class="promo">
+        この投稿は <b><a href="kbbs.php">Kurage BBS</a></b>（宣伝も求人も無料で載せられる、𝕏ログイン＋同一ドメインメール確認つきの掲示板）に掲載されています。あなたの会社・お店・求人も無料で掲載できます。
+      </div>
+      <a class="back" href="kbbs.php">← 掲示板の一覧へ戻る</a>
+    </div>
+    <footer>Kurage BBS（kbbs） — <a href="https://exbridge.jp/">株式会社エクスブリッジ</a> ・ <a href="https://kurage.exbridge.jp/">Kurage</a></footer>
+    </body></html><?php
     exit;
 }
 
@@ -291,14 +411,14 @@ footer a{color:#fff}
 <?php if (!$posts): ?>
 <div class="card" style="text-align:center;color:#5b6f76">まだ投稿がありません。最初の宣伝・求人、お待ちしています！</div>
 <?php endif; ?>
-<?php foreach ($posts as $p): ?>
+<?php foreach ($posts as $p): $perma = kbbs_permalink($p); ?>
 <div class="post-item">
-  <div class="t"><?php echo h($p['title']); ?></div>
+  <div class="t"><a href="<?php echo h($perma); ?>" style="color:inherit;text-decoration:none"><?php echo h($p['title']); ?></a></div>
   <div class="meta"><?php echo h(date('Y/m/d H:i', (int)$p['ts'])); ?> ／ 投稿:
     <?php if (!empty($p['user'])): ?><a href="https://x.com/<?php echo rawurlencode($p['user']); ?>" target="_blank" rel="noopener">@<?php echo h($p['user']); ?></a>
     <?php else: ?><?php echo h($p['host'] ?? parse_url($p['url'], PHP_URL_HOST)); ?><?php endif; ?></div>
-  <div class="b"><?php echo h($p['text']); ?></div>
-  <div class="u"><a href="<?php echo h($p['url']); ?>" target="_blank">🔗 <?php echo h($p['url']); ?></a></div>
+  <div class="b"><?php echo h(kbbs_excerpt($p['text'], 120)); ?></div>
+  <div class="u"><a href="<?php echo h($perma); ?>">続きを読む →</a> ／ <a href="<?php echo h($p['url']); ?>" target="_blank">🔗 <?php echo h(parse_url($p['url'], PHP_URL_HOST)); ?></a></div>
 </div>
 <?php endforeach; ?>
 <?php if ($pages > 1): ?>
@@ -306,6 +426,17 @@ footer a{color:#fff}
   <?php if ($i === $page): ?><b><?php echo $i; ?></b><?php else: ?><a href="kbbs.php?p=<?php echo $i; ?>"><?php echo $i; ?></a><?php endif; ?>
 <?php endfor; ?></div>
 <?php endif; ?>
+<?php
+/* 一覧の構造化データ（AI検索/リッチリザルト向け ItemList） */
+$__items = array(); $__i = 0;
+foreach ($posts as $p) { $__i++; $__items[] = array('@type'=>'ListItem','position'=>$__i,'url'=>kbbs_permalink($p, true),'name'=>(string)$p['title']); }
+if ($__items) {
+    $__ld = array('@context'=>'https://schema.org','@type'=>'CollectionPage',
+        'name'=>'Kurage BBS — 宣伝・求人OKの掲示板','url'=>preg_replace('#\?.*$#','',KBBS_BASE_URL),
+        'inLanguage'=>'ja','mainEntity'=>array('@type'=>'ItemList','itemListElement'=>$__items));
+    echo '<script type="application/ld+json">' . json_encode($__ld, JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) . "</script>\n";
+}
+?>
 
 <?php if ($KBBS_X): ?>
 <h2 class="sec">🔗 なぜ、宣伝OKの掲示板なのか</h2>
