@@ -255,7 +255,8 @@ if (isset($_GET['id'])) {
         <div class="visit"><a href="<?php echo h($sp_url); ?>" target="_blank">🔗 <?php echo h($sp_url); ?></a></div>
       </article>
       <div class="promo">
-        この投稿は <b><a href="kbbs.php">Kurage BBS</a></b>（宣伝も求人も無料で載せられる、𝕏ログイン＋同一ドメインメール確認つきの掲示板）に掲載されています。あなたの会社・お店・求人も無料で掲載できます。
+        この投稿は <b><a href="kbbs.php">Kurage BBS</a></b>（宣伝も求人も無料で載せられる、𝕏ログイン＋同一ドメインメール確認つきの掲示板）に掲載されています。あなたの会社・お店・求人も無料で掲載できます。<br>
+        <b>このページは固有URL・構造化データ(JSON-LD)・サイトマップ登録つき</b>で、検索(SEO)・AI回答(AEO)・生成AI検索(GEO)に見つけてもらいやすい“あなた専用のLP”になります。
       </div>
       <a class="back" href="kbbs.php">← 掲示板の一覧へ戻る</a>
     </div>
@@ -345,7 +346,7 @@ footer a{color:#fff}
   <img src="images/kurage-ecosystem-avatar.png" alt="Kurage" style="height:120px;display:block;margin:0 auto 8px;filter:drop-shadow(0 6px 16px rgba(10,90,84,.25))">
   <h1>宣伝も求人もOKの掲示板</h1>
   <p class="tag">会社・お店・サービスのPRも、求人（スタッフ・アルバイト募集）の掲載も歓迎します。ホームページ・採用ページへのリンクもどうぞ。</p>
-  <div class="badges"><span>宣伝歓迎</span><span>求人OK</span><span>リンクOK</span><span>掲載無料</span><span>𝕏ログイン制</span></div>
+  <div class="badges"><span>宣伝歓迎</span><span>求人OK</span><span>リンクOK</span><span>掲載無料</span><span>SEO/AEO/GEO対応</span><span>固有URL付き</span></div>
 </div>
 
 <div class="wrap">
@@ -354,6 +355,19 @@ footer a{color:#fff}
   <b style="color:var(--teal-d)">この掲示板について</b><br>
   「宣伝お断り」の掲示板は多いですが、ここは逆です。<b>あなたの会社・お店・サービスのPRも、求人（スタッフ・アルバイト募集）の掲載も自由にどうぞ</b>（ホームページ・採用ページへのリンク掲載OK・無料）。
   なりすまし・スパム防止のため、投稿には<b>𝕏ログイン</b>と、<b>投稿するURLと同じドメインのメールアドレス</b>（＝その会社のご本人様）が必要です。だから<b>偽求人・なりすましが混ざりません</b>。
+</div>
+
+<div class="card" style="border:2px solid var(--teal-l);box-shadow:0 10px 28px rgba(10,90,84,.10)">
+  <b style="color:var(--teal-d);font-size:15.5px">📈 投稿すると、SEO・AEO・GEOに強い“あなた専用ページ”が無料で手に入ります</b>
+  <p style="font-size:13.5px;margin-top:8px">ここへの投稿は「掲示板の1行」では終わりません。<b>投稿1件ごとに固有URL（あなた専用ページ）</b>が発行され、検索エンジンにもAIにも見つけてもらいやすい作りになっています。</p>
+  <ul style="list-style:none;margin:10px 0 0;padding:0;font-size:13.5px">
+    <li style="margin:6px 0">✅ <b>固有URL</b>：<code>kbbs.php?id=…</code> で、あなたの宣伝・求人が独立した1ページに（title・見出し・OGP付き）</li>
+    <li style="margin:6px 0">✅ <b>構造化データ(JSON-LD)付き</b>：AIと検索エンジンが内容を正確に理解（投稿＝DiscussionForumPosting／パンくず）</li>
+    <li style="margin:6px 0">✅ <b>サイトマップ自動登録</b>：Googleと各AI検索クローラー（GPTBot・ClaudeBot・PerplexityBot 等）に発見されやすい</li>
+    <li style="margin:6px 0">✅ <b>あなたのサイトへの被リンク(dofollow)</b>：SEOの土台になる“推薦リンク”</li>
+  </ul>
+  <p style="font-size:14px;margin-top:10px;color:var(--teal-d);font-weight:800">→ 検索(SEO)・AI回答(AEO)・生成AI検索(GEO)に強い“もう一つのLP”を、無料で持てます。</p>
+  <p style="font-size:11.5px;color:#5b6f76;margin-top:8px">※ 検索順位は投稿内容の質・情報量にもよります。しっかり書くほど効きます（極端に短い投稿は自動で noindex にし、サイト全体の品質を守っています）。</p>
 </div>
 
 <h2 class="sec">📝 宣伝・求人を投稿する</h2>
