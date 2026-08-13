@@ -18,6 +18,8 @@
 if (!defined('KBBS_ADMIN_KEY')) { define('KBBS_ADMIN_KEY', 'change-me'); }  // スタンドアロン時の管理画面キー（?admin=1&key=〜）。設置したら必ず変更。
 if (!defined('KBBS_BASE_URL'))  { define('KBBS_BASE_URL', 'https://kurage.exbridge.jp/kbbs.php'); }  // 個別ページ/canonical/OGPの絶対URL基点。設置ドメインに合わせて変更。
 if (!defined('KBBS_INDEX_MIN_LEN')) { define('KBBS_INDEX_MIN_LEN', 60); }  // これ未満の本文の投稿は個別ページを noindex（薄い宣伝でサイト品質を下げないため）。被リンク自体は follow で有効。
+if (!defined('KBBS_IMG_MAX_BYTES')) { define('KBBS_IMG_MAX_BYTES', 8 * 1024 * 1024); }  // 添付画像の上限（8MB）
+$KBBS_IMG_DIR = __DIR__ . '/kbbs_uploads';  // 添付画像の保存先（GDでJPEG再エンコードして保存＝偽装ファイル対策）
 $KBBS_X = file_exists(__DIR__ . '/auth_common.php');
 if ($KBBS_X) {
     require_once __DIR__ . '/auth_common.php';
@@ -87,6 +89,42 @@ function kbbs_excerpt($s, $n = 110) {           // meta description 用の抜粋
     return (mb_strlen($s, 'UTF-8') > $n) ? (mb_substr($s, 0, $n, 'UTF-8') . '…') : $s;
 }
 function kbbs_iso($ts) { return date('c', (int)$ts); }
+function kbbs_img_url($post, $absolute = false) {   // 添付画像のURL（無ければ空）
+    if (empty($post['img'])) { return ''; }
+    $rel = 'kbbs_uploads/' . rawurlencode((string)$post['img']);
+    return $absolute ? (preg_replace('#/kbbs\.php$#', '/', KBBS_BASE_URL) . $rel) : $rel;
+}
+/* 添付画像の保存。GDで必ずJPEGに再エンコードする＝実体検証・EXIF除去・スクリプト偽装の無害化を兼ねる。
+ * 戻り値: array(保存ファイル名, エラーメッセージ)。未添付なら array('','')。 */
+function kbbs_img_save($f) {
+    global $KBBS_IMG_DIR;
+    if (!is_array($f) || ($f['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) { return array('', ''); }
+    if (!function_exists('imagecreatefromstring')) {   // GD拡張が無いサーバーでは画像なしで投稿してもらう（落とさない）
+        return array('', 'このサーバーでは画像アップロードを利用できません（GD拡張なし）。画像なしで投稿してください。');
+    }
+    if ($f['error'] !== UPLOAD_ERR_OK) { return array('', '画像のアップロードに失敗しました。もう一度お試しください。'); }
+    if ((int)$f['size'] > KBBS_IMG_MAX_BYTES) { return array('', '画像は8MBまでにしてください。'); }
+    $raw = @file_get_contents($f['tmp_name']);
+    $im = $raw !== false ? @imagecreatefromstring($raw) : false;
+    if (!$im) { return array('', '画像ファイル（JPEG/PNG/WebP/GIF）をご利用ください。'); }
+    if (function_exists('exif_read_data')) {   // スマホ写真の向き補正
+        $x = @exif_read_data($f['tmp_name']);
+        $o = (int)($x['Orientation'] ?? 0);
+        if ($o === 3) { $im = imagerotate($im, 180, 0); }
+        elseif ($o === 6) { $im = imagerotate($im, -90, 0); }
+        elseif ($o === 8) { $im = imagerotate($im, 90, 0); }
+    }
+    $w = imagesx($im); $h = imagesy($im); $max = 1600;
+    $r = ($w > $max || $h > $max) ? min($max / $w, $max / $h) : 1;
+    $nw = max(1, (int)round($w * $r)); $nh = max(1, (int)round($h * $r));
+    $out = imagecreatetruecolor($nw, $nh);
+    imagefill($out, 0, 0, imagecolorallocate($out, 255, 255, 255));   // 透過は白で敷く
+    imagecopyresampled($out, $im, 0, 0, 0, 0, $nw, $nh, $w, $h);
+    if (!is_dir($KBBS_IMG_DIR)) { @mkdir($KBBS_IMG_DIR, 0755, true); @file_put_contents($KBBS_IMG_DIR . '/index.html', ''); }
+    $name = date('Ymd') . '-' . bin2hex(random_bytes(6)) . '.jpg';
+    if (!@imagejpeg($out, $KBBS_IMG_DIR . '/' . $name, 85)) { return array('', '画像の保存に失敗しました。時間をおいてお試しください。'); }
+    return array($name, '');
+}
 
 /* ---- CSRF ---- */
 if (session_status() === PHP_SESSION_ACTIVE && empty($_SESSION['kbbs_csrf'])) {
@@ -101,7 +139,9 @@ if ($logged_in && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $txt = trim((string)($_POST['text'] ?? ''));
     $url = trim((string)($_POST['url'] ?? ''));
     $eml = trim((string)($_POST['email'] ?? ''));
-    if (($_POST['csrf'] ?? '') !== $csrf || $csrf === '') {
+    if (empty($_POST) && (int)($_SERVER['CONTENT_LENGTH'] ?? 0) > 0) {
+        $err = '送信サイズが大きすぎます（画像は8MBまでにしてください）。';
+    } elseif (($_POST['csrf'] ?? '') !== $csrf || $csrf === '') {
         $err = '送信を確認できませんでした。もう一度お試しください。';
     } elseif ($t === '' || mb_strlen($t, 'UTF-8') > 60) {
         $err = 'タイトルをご入力ください（60文字まで）。';
@@ -122,10 +162,15 @@ if ($logged_in && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $err = '投稿は1日1回までです。また明日お願いします。'; break;
             }
         }
+        if ($err === '') {   // 画像は他の検証を全部通ってから保存（弾かれる投稿のファイルを作らない）
+            list($img, $imgerr) = kbbs_img_save($_FILES['image'] ?? null);
+            if ($imgerr !== '') { $err = $imgerr; }
+        }
         if ($err === '') {
             kbbs_append(array(
                 'id' => uniqid(), 'ts' => time(), 'user' => preg_replace('/[^0-9A-Za-z_]/', '', $user),
                 'host' => $host, 'title' => $t, 'text' => $txt, 'url' => $url, 'email' => $eml,
+                'img' => $img,
             ));
             header('Location: kbbs.php?posted=1'); exit;
         }
@@ -189,6 +234,8 @@ if (isset($_GET['id'])) {
     $sp_perma = kbbs_permalink($sp, true);
     $sp_idx   = kbbs_indexable($sp);
     $sp_desc  = kbbs_excerpt($sp_text, 110);
+    $sp_img   = kbbs_img_url($sp, true);   // 添付があれば投稿画像をog:imageに使う
+    $sp_og    = $sp_img !== '' ? $sp_img : 'https://kurage.exbridge.jp/images/kbbs-ogp.png';
     if ($sp_user !== '') { $author = array('@type'=>'Person','name'=>'@'.$sp_user,'url'=>'https://x.com/'.$sp_user); }
     else { $author = array('@type'=>'Organization','name'=>$sp_host,'url'=>$sp_url); }
     $ld_post = array(
@@ -198,6 +245,7 @@ if (isset($_GET['id'])) {
         'publisher'=>array('@type'=>'Organization','name'=>'Kurage BBS（株式会社エクスブリッジ）','url'=>preg_replace('#\?.*$#','',KBBS_BASE_URL)),
         'sharedContent'=>array('@type'=>'WebPage','url'=>$sp_url,'name'=>$sp_title),
     );
+    if ($sp_img !== '') { $ld_post['image'] = $sp_img; }
     $ld_bc = array('@context'=>'https://schema.org','@type'=>'BreadcrumbList','itemListElement'=>array(
         array('@type'=>'ListItem','position'=>1,'name'=>'Kurage BBS','item'=>preg_replace('#\?.*$#','',KBBS_BASE_URL)),
         array('@type'=>'ListItem','position'=>2,'name'=>$sp_title),
@@ -213,9 +261,9 @@ if (isset($_GET['id'])) {
     <meta property="og:title" content="<?php echo h($sp_title); ?>">
     <meta property="og:description" content="<?php echo h($sp_desc); ?>">
     <meta property="og:url" content="<?php echo h($sp_perma); ?>">
-    <meta property="og:image" content="https://kurage.exbridge.jp/images/kbbs-ogp.png">
+    <meta property="og:image" content="<?php echo h($sp_og); ?>">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:image" content="https://kurage.exbridge.jp/images/kbbs-ogp.png">
+    <meta name="twitter:image" content="<?php echo h($sp_og); ?>">
     <script type="application/ld+json"><?php echo json_encode($ld_post, $J); ?></script>
     <script type="application/ld+json"><?php echo json_encode($ld_bc, $J); ?></script>
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-BP0650KDFR"></script>
@@ -251,6 +299,7 @@ if (isset($_GET['id'])) {
         <div class="meta"><?php echo h(date('Y/m/d H:i', $sp_ts)); ?> ／ 投稿:
           <?php if ($sp_user !== ''): ?><a href="https://x.com/<?php echo rawurlencode($sp_user); ?>" target="_blank" rel="noopener">@<?php echo h($sp_user); ?></a><?php else: ?><?php echo h($sp_host); ?><?php endif; ?>
         </div>
+        <?php if ($sp_img !== ''): ?><img src="<?php echo h(kbbs_img_url($sp)); ?>" alt="" style="max-width:100%;border-radius:12px;margin-top:14px"><?php endif; ?>
         <div class="body"><?php echo h($sp_text); ?></div>
         <div class="visit"><a href="<?php echo h($sp_url); ?>" target="_blank">🔗 <?php echo h($sp_url); ?></a></div>
       </article>
@@ -346,7 +395,7 @@ footer a{color:#fff}
   <img src="images/kurage-ecosystem-avatar.png" alt="Kurage" style="height:120px;display:block;margin:0 auto 8px;filter:drop-shadow(0 6px 16px rgba(10,90,84,.25))">
   <h1>宣伝も求人もOKの掲示板</h1>
   <p class="tag">会社・お店・サービスのPRも、求人（スタッフ・アルバイト募集）の掲載も歓迎します。ホームページ・採用ページへのリンクもどうぞ。</p>
-  <div class="badges"><span>宣伝歓迎</span><span>求人OK</span><span>リンクOK</span><span>掲載無料</span><span>SEO/AEO/GEO対応</span><span>固有URL付き</span></div>
+  <div class="badges"><span>宣伝歓迎</span><span>求人OK</span><span>リンクOK</span><span>画像OK</span><span>掲載無料</span><span>SEO/AEO/GEO対応</span><span>固有URL付き</span></div>
 </div>
 
 <div class="wrap">
@@ -376,7 +425,7 @@ footer a{color:#fff}
 
 <?php if ($logged_in): ?>
 <div class="card">
-  <form class="post" method="post" action="kbbs.php">
+  <form class="post" method="post" action="kbbs.php" enctype="multipart/form-data">
     <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
     <label>タイトル（60文字まで）</label>
     <input type="text" name="title" maxlength="60" required value="<?php echo h($_POST['title'] ?? ''); ?>" placeholder="例）名古屋の◯◯サロン初回50%オフ ／ 【求人】◯◯店 スタッフ募集">
@@ -385,6 +434,9 @@ footer a{color:#fff}
     <label>ホームページ・採用ページのURL</label>
     <input type="url" name="url" required value="<?php echo h($_POST['url'] ?? ''); ?>" placeholder="https://example.jp/">
     <div class="hint">投稿に表示され、リンクになります。</div>
+    <label>画像（任意）</label>
+    <input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif">
+    <div class="hint">お店・商品・求人の写真など（8MBまで・JPEG/PNG/WebP/GIF）。自動でリサイズして掲載します。</div>
     <label>メールアドレス（URLと同じドメイン）</label>
     <input type="email" name="email" required value="<?php echo h($_POST['email'] ?? ''); ?>" placeholder="info@example.jp">
     <div class="hint">ご本人様確認のため、<b>投稿するURLと同じドメイン</b>のメールアドレスが必要です（例：URLが example.jp なら 〇〇@example.jp）。この確認があるので<b>偽求人・なりすましが混ざりません</b>。メールアドレスは公開されません。<br><b>ご投稿いただいたURLのSEO/GEO/AEO自動診断の結果を、このアドレス宛にお送りします（無料）。</b></div>
@@ -432,6 +484,7 @@ footer a{color:#fff}
     <?php if (!empty($p['user'])): ?><a href="https://x.com/<?php echo rawurlencode($p['user']); ?>" target="_blank" rel="noopener">@<?php echo h($p['user']); ?></a>
     <?php else: ?><?php echo h($p['host'] ?? parse_url($p['url'], PHP_URL_HOST)); ?><?php endif; ?></div>
   <div class="b"><?php echo h(kbbs_excerpt($p['text'], 120)); ?></div>
+  <?php if (!empty($p['img'])): ?><a href="<?php echo h($perma); ?>"><img src="<?php echo h(kbbs_img_url($p)); ?>" alt="" loading="lazy" style="max-width:100%;max-height:240px;border-radius:10px;margin-top:10px"></a><?php endif; ?>
   <div class="u"><a href="<?php echo h($perma); ?>">続きを読む →</a> ／ <a href="<?php echo h($p['url']); ?>" target="_blank">🔗 <?php echo h(parse_url($p['url'], PHP_URL_HOST)); ?></a></div>
 </div>
 <?php endforeach; ?>
