@@ -157,12 +157,12 @@ $pages = max(1, (int)ceil($total / $per));
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kurage BBS（kbbs） — 宣伝OK・リンクOKの掲示板｜会社・お店・サービスを自由にPR</title>
-<meta name="description" content="会社・お店・サービスの宣伝を歓迎する掲示板。ホームページへのリンク投稿OK。𝕏ログインと、宣伝するURLと同じドメインのメールアドレスで、ご本人様だけが投稿できる安心設計。名古屋のAIシステム開発会社エクスブリッジが運営。">
+<title>Kurage BBS（kbbs） — 宣伝OK・求人OKの掲示板｜会社・お店のPR、求人の無料掲載</title>
+<meta name="description" content="会社・お店・サービスの宣伝も、求人（スタッフ・アルバイト募集）の無料掲載も歓迎する掲示板。ホームページ・採用ページへのリンク投稿OK。𝕏ログインと、投稿するURLと同じドメインのメールアドレスで、ご本人様だけが投稿できる安心設計（＝偽求人・なりすましが混ざりません）。名古屋のAIシステム開発会社エクスブリッジが運営。">
 <link rel="canonical" href="https://kurage.exbridge.jp/kbbs.php">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Kurage BBS — 宣伝OK・リンクOKの掲示板">
-<meta property="og:description" content="会社・お店・サービスの宣伝を歓迎。ホームページへのリンク投稿OK。𝕏ログイン＋同一ドメインメールの本人確認つき。">
+<meta property="og:title" content="Kurage BBS — 宣伝OK・求人OKの掲示板">
+<meta property="og:description" content="会社・お店・サービスの宣伝も、求人の無料掲載も歓迎。ホームページ・採用ページへのリンク投稿OK。𝕏ログイン＋同一ドメインメールの本人確認つきで、偽求人が混ざりません。">
 <meta property="og:url" content="https://kurage.exbridge.jp/kbbs.php">
 <meta property="og:image" content="https://kurage.exbridge.jp/images/kbbs-ogp.png">
 <meta property="og:image:width" content="1200">
@@ -223,20 +223,20 @@ footer a{color:#fff}
 
 <div class="hero">
   <img src="images/kurage-ecosystem-avatar.png" alt="Kurage" style="height:120px;display:block;margin:0 auto 8px;filter:drop-shadow(0 6px 16px rgba(10,90,84,.25))">
-  <h1>宣伝OK・リンクOKの掲示板</h1>
-  <p class="tag">会社・お店・サービスのPRを歓迎します。ホームページへのリンクもどうぞ。</p>
-  <div class="badges"><span>宣伝歓迎</span><span>リンクOK</span><span>掲載無料</span><span>𝕏ログイン制</span></div>
+  <h1>宣伝も求人もOKの掲示板</h1>
+  <p class="tag">会社・お店・サービスのPRも、求人（スタッフ・アルバイト募集）の掲載も歓迎します。ホームページ・採用ページへのリンクもどうぞ。</p>
+  <div class="badges"><span>宣伝歓迎</span><span>求人OK</span><span>リンクOK</span><span>掲載無料</span><span>𝕏ログイン制</span></div>
 </div>
 
 <div class="wrap">
 
 <div class="card" style="font-size:13.5px">
   <b style="color:var(--teal-d)">この掲示板について</b><br>
-  「宣伝お断り」の掲示板は多いですが、ここは逆です。<b>あなたの会社・お店・サービスを自由にPRしてください</b>（ホームページへのリンク掲載OK）。
-  なりすまし・スパム防止のため、投稿には<b>𝕏ログイン</b>と、<b>宣伝するURLと同じドメインのメールアドレス</b>（＝その会社のご本人様）が必要です。
+  「宣伝お断り」の掲示板は多いですが、ここは逆です。<b>あなたの会社・お店・サービスのPRも、求人（スタッフ・アルバイト募集）の掲載も自由にどうぞ</b>（ホームページ・採用ページへのリンク掲載OK・無料）。
+  なりすまし・スパム防止のため、投稿には<b>𝕏ログイン</b>と、<b>投稿するURLと同じドメインのメールアドレス</b>（＝その会社のご本人様）が必要です。だから<b>偽求人・なりすましが混ざりません</b>。
 </div>
 
-<h2 class="sec">📝 宣伝を投稿する</h2>
+<h2 class="sec">📝 宣伝・求人を投稿する</h2>
 <?php if ($err): ?><div class="err"><?php echo h($err); ?></div><?php endif; ?>
 <?php if ($ok_msg): ?><div class="okm"><?php echo h($ok_msg); ?></div><?php endif; ?>
 
@@ -245,15 +245,15 @@ footer a{color:#fff}
   <form class="post" method="post" action="kbbs.php">
     <input type="hidden" name="csrf" value="<?php echo h($csrf); ?>">
     <label>タイトル（60文字まで）</label>
-    <input type="text" name="title" maxlength="60" required value="<?php echo h($_POST['title'] ?? ''); ?>" placeholder="例）名古屋の◯◯サロン、初回50%オフやってます">
+    <input type="text" name="title" maxlength="60" required value="<?php echo h($_POST['title'] ?? ''); ?>" placeholder="例）名古屋の◯◯サロン初回50%オフ ／ 【求人】◯◯店 スタッフ募集">
     <label>本文（1,200文字まで）</label>
-    <textarea name="text" maxlength="1200" required placeholder="サービスの紹介、こだわり、お知らせなど、ご自由にどうぞ。"><?php echo h($_POST['text'] ?? ''); ?></textarea>
-    <label>宣伝するホームページのURL</label>
+    <textarea name="text" maxlength="1200" required placeholder="サービスの紹介・こだわり・お知らせや、求人の場合は仕事内容・勤務地・給与・応募方法など、ご自由にどうぞ。"><?php echo h($_POST['text'] ?? ''); ?></textarea>
+    <label>ホームページ・採用ページのURL</label>
     <input type="url" name="url" required value="<?php echo h($_POST['url'] ?? ''); ?>" placeholder="https://example.jp/">
     <div class="hint">投稿に表示され、リンクになります。</div>
     <label>メールアドレス（URLと同じドメイン）</label>
     <input type="email" name="email" required value="<?php echo h($_POST['email'] ?? ''); ?>" placeholder="info@example.jp">
-    <div class="hint">ご本人様確認のため、<b>宣伝するURLと同じドメイン</b>のメールアドレスが必要です（例：URLが example.jp なら 〇〇@example.jp）。メールアドレスは公開されません。<br><b>ご投稿いただいたURLのSEO/GEO/AEO自動診断の結果を、このアドレス宛にお送りします（無料）。</b></div>
+    <div class="hint">ご本人様確認のため、<b>投稿するURLと同じドメイン</b>のメールアドレスが必要です（例：URLが example.jp なら 〇〇@example.jp）。この確認があるので<b>偽求人・なりすましが混ざりません</b>。メールアドレスは公開されません。<br><b>ご投稿いただいたURLのSEO/GEO/AEO自動診断の結果を、このアドレス宛にお送りします（無料）。</b></div>
     <button type="submit" onclick="if(window.gtag)gtag('event','kbbs_post_submit')">投稿する（無料）</button>
   </form>
 </div>
@@ -268,12 +268,12 @@ footer a{color:#fff}
 <?php endif; ?>
 <?php else: ?>
 <div class="gate">
-  <p style="font-weight:800;color:var(--teal-d);font-size:16px">投稿には 𝕏 ログインが必要です</p>
+  <p style="font-weight:800;color:var(--teal-d);font-size:16px">宣伝・求人の投稿には 𝕏 ログインが必要です</p>
   <p style="font-size:13.5px;margin:8px 0 16px">閲覧はどなたでも自由。投稿は𝕏アカウントをお持ちの方に限定しています（なりすまし・スパム対策）。</p>
   <a class="x-btn" href="?login=1" onclick="if(window.gtag)gtag('event','kbbs_x_login_click')">𝕏 でログインして投稿する</a>
   <div class="why">
     <b>投稿にあたって</b><br>
-    ・宣伝するURLと<b>同じドメインのメールアドレス</b>のご入力が必要です（ご本人様確認のため。メールは公開されません）。<br>
+    ・投稿するURL（会社サイト・採用ページ等）と<b>同じドメインのメールアドレス</b>のご入力が必要です（ご本人様確認のため。メールは公開されません）。<br>
     ・運営（𝕏 <b>@xb_bittensor</b>）から、フォローやDMでご連絡・ご提案をさせていただく場合があります。<br>
     ・公序良俗に反する投稿・虚偽の投稿・無関係なドメインでの投稿は削除します。
   </div>
@@ -287,9 +287,9 @@ footer a{color:#fff}
 </div>
 <?php endif; ?>
 
-<h2 class="sec">📋 みんなの宣伝（<?php echo (int)$total; ?>件）</h2>
+<h2 class="sec">📋 みんなの宣伝・求人（<?php echo (int)$total; ?>件）</h2>
 <?php if (!$posts): ?>
-<div class="card" style="text-align:center;color:#5b6f76">まだ投稿がありません。最初の宣伝、お待ちしています！</div>
+<div class="card" style="text-align:center;color:#5b6f76">まだ投稿がありません。最初の宣伝・求人、お待ちしています！</div>
 <?php endif; ?>
 <?php foreach ($posts as $p): ?>
 <div class="post-item">
