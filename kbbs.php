@@ -167,16 +167,18 @@ if ($logged_in && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($imgerr !== '') { $err = $imgerr; }
         }
         if ($err === '') {
+            $pid = uniqid();
             kbbs_append(array(
-                'id' => uniqid(), 'ts' => time(), 'user' => preg_replace('/[^0-9A-Za-z_]/', '', $user),
+                'id' => $pid, 'ts' => time(), 'user' => preg_replace('/[^0-9A-Za-z_]/', '', $user),
                 'host' => $host, 'title' => $t, 'text' => $txt, 'url' => $url, 'email' => $eml,
                 'img' => $img,
             ));
-            header('Location: kbbs.php?posted=1'); exit;
+            header('Location: kbbs.php?posted=1&nid=' . rawurlencode($pid)); exit;  // nid=投稿直後にシェア導線を出すため
         }
     }
 }
 if (isset($_GET['posted'])) { $ok_msg = '投稿しました。掲載ありがとうございます！ ご入力のメールアドレス宛に、そのURLのSEO/GEO/AEO自動診断の結果を追ってお送りします。'; }
+$new_post = isset($_GET['nid']) ? kbbs_find((string)$_GET['nid']) : null;  // 投稿直後のシェア導線用
 
 /* ---- 管理者: 投稿者一覧（メール・𝕏フォロー/DM＝営業の起点） ---- */
 if ($is_admin && isset($_GET['admin'])) {
@@ -303,6 +305,15 @@ if (isset($_GET['id'])) {
         <div class="body"><?php echo h($sp_text); ?></div>
         <div class="visit"><a href="<?php echo h($sp_url); ?>" target="_blank">🔗 <?php echo h($sp_url); ?></a></div>
       </article>
+      <div style="margin-top:16px;text-align:center">
+        <a href="https://x.com/intent/post?text=<?php echo rawurlencode($sp_title . ' | Kurage BBS'); ?>&url=<?php echo rawurlencode($sp_perma); ?>" target="_blank" rel="noopener"
+           style="display:inline-block;background:#0f1419;color:#fff;font-weight:900;font-size:14px;text-decoration:none;border-radius:999px;padding:11px 26px;margin:2px 6px"
+           onclick="if(window.gtag)gtag('event','kbbs_share_click',{place:'post'})">𝕏 でこの投稿をシェア</a>
+        <button type="button"
+           style="background:#fff;border:1.5px solid var(--teal-l);color:var(--teal-d);font-weight:800;font-size:13.5px;border-radius:999px;padding:10px 22px;margin:2px 6px;cursor:pointer;font-family:inherit"
+           onclick="navigator.clipboard.writeText('<?php echo h($sp_perma); ?>').then(()=>{this.textContent='✔ コピーしました'});if(window.gtag)gtag('event','kbbs_copy_url')">URLをコピー</button>
+        <p style="font-size:11.5px;color:#5b6f76;margin-top:8px">投稿者ご本人のシェア大歓迎。シェアされるほど、このページが検索・AIに見つけてもらいやすくなります。</p>
+      </div>
       <div class="promo">
         この投稿は <b><a href="kbbs.php">Kurage BBS</a></b>（宣伝も求人も無料で載せられる、𝕏ログイン＋同一ドメインメール確認つきの掲示板）に掲載されています。あなたの会社・お店・求人も無料で掲載できます。<br>
         <b>このページは固有URL・構造化データ(JSON-LD)・サイトマップ登録つき</b>で、検索(SEO)・AI回答(AEO)・生成AI検索(GEO)に見つけてもらいやすい“あなた専用のLP”になります。
@@ -422,6 +433,16 @@ footer a{color:#fff}
 <h2 class="sec">📝 宣伝・求人を投稿する</h2>
 <?php if ($err): ?><div class="err"><?php echo h($err); ?></div><?php endif; ?>
 <?php if ($ok_msg): ?><div class="okm"><?php echo h($ok_msg); ?></div><?php endif; ?>
+<?php if ($ok_msg && $new_post): $np_perma = kbbs_permalink($new_post, true); ?>
+<div class="card" style="border:2px solid var(--teal-l);text-align:center">
+  <b style="color:var(--teal-d)">🎉 あなた専用の投稿ページができました</b>
+  <p style="font-size:13px;margin:6px 0 12px">このページをシェアするほど、検索・AIに見つけてもらいやすくなります（SEO/AEO/GEOに効きます）。</p>
+  <a href="https://x.com/intent/post?text=<?php echo rawurlencode($new_post['title'] . ' | Kurage BBS'); ?>&url=<?php echo rawurlencode($np_perma); ?>" target="_blank" rel="noopener"
+     style="display:inline-block;background:#0f1419;color:#fff;font-weight:900;font-size:14px;text-decoration:none;border-radius:999px;padding:11px 26px;margin:2px 6px"
+     onclick="if(window.gtag)gtag('event','kbbs_share_click',{place:'posted'})">𝕏 でこの投稿をシェア</a>
+  <a href="<?php echo h(kbbs_permalink($new_post)); ?>" style="display:inline-block;color:var(--teal);font-weight:800;font-size:13.5px;margin:2px 6px">投稿ページを見る →</a>
+</div>
+<?php endif; ?>
 
 <?php if ($logged_in): ?>
 <div class="card">
